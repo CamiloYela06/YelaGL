@@ -18,7 +18,11 @@ int main()
 		return -1;
 	}
 	glfwMakeContextCurrent(window);
-
+	
+	while (!glfwWindowShouldClose(window))
+	{
+		glfwPollEvents();
+	}
 
 
 	glfwDestroyWindow(window);
