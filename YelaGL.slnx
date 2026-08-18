@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="YelaGL.vcxproj" Id="28aeca01-53b1-469d-8ce8-935232f681d5" />
+</Solution>
