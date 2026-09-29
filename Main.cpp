@@ -25,17 +25,61 @@ const char* vertexShaderSource =
 "    gl_Position = uMVP * vec4(aPos, 1.0);\n"
 "    ourColor = aColor;\n"
 "}\0";
-
+        
 const char* fragmentShaderSource =
 "#version 330 core\n"
-"out vec4 FragColor;\n"
 "in vec4 ourColor;\n"
+"out vec4 FragColor;\n"
 "void main() {\n"
 "    FragColor = ourColor;\n"
 "}\0";
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
+}
+
+// Variables de la cámara
+glm::vec3 cameraPos = glm::vec3(1.5f, 0.8f, 3.0f);
+glm::vec3 cameraFront = glm::normalize(
+    glm::vec3(0.0f, 0.0f, 0.0f) - cameraPos
+);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+float cameraSpeed = 2.5f;
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
+
+// Procesar movimiento de la cámara
+void processInput(GLFWwindow* window) {
+
+    // Salir del programa
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
+
+    // Dirección horizontal de la cámara
+    glm::vec3 front = glm::normalize(
+        glm::vec3(cameraFront.x, 0.0f, cameraFront.z)
+    );
+
+    // Dirección hacia la derecha
+    glm::vec3 right = glm::normalize(
+        glm::cross(front, cameraUp)
+    );
+
+    // Movimiento con WASD
+    float velocity = cameraSpeed * deltaTime;
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        cameraPos += front * velocity;
+
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        cameraPos -= front * velocity;
+
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        cameraPos -= right * velocity;
+
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        cameraPos += right * velocity;
 }
 
 int main() {
@@ -110,21 +154,21 @@ int main() {
     // Cada bloque de 7 floats corresponde a: pos.x, pos.y, pos.z, r, g, b, a.
     // Las coordenadas Z se usan para situar los triángulos a distintas profundidades.
     float verticesTriangulos[] = {
-        // --- TRIÁNGULO 1: VERDE (Al frente, Z = 0.4, Pequeño) ---
-        // Posición (X, Y, Z)      Color (R, G, B, Alpha)
+        // --- TRIÁNGULO 1: (Al frente, Z = 0.4, Pequeño) ---
+        // Posición (X, Y, Z)      Color (R, G, B, A)
         -0.2f, -0.3f,  0.4f,     0.0f, 1.0f, 0.0f, 0.6f,
          0.2f, -0.3f,  0.4f,     0.0f, 1.0f, 0.0f, 0.6f,
          0.0f,  0.1f,  0.4f,     0.0f, 1.0f, 0.0f, 0.6f,
 
-         // --- TRIÁNGULO 2: ROJO (En el centro, Z = 0.0, Mediano) ---
-         -0.4f, -0.3f,  0.0f,     1.0f, 0.0f, 0.0f, 0.6f,
-          0.4f, -0.3f,  0.0f,     1.0f, 0.0f, 0.0f, 0.6f,
-          0.0f,  0.3f,  0.0f,     1.0f, 0.0f, 0.0f, 0.6f,
+         // --- TRIÁNGULO 2: MEDIANO (En el centro, Z = 0.0) 
+         -0.4f, -0.3f,  0.0f,     1.0f, 0.92f, 0.23f, 0.6f,
+          0.4f, -0.3f,  0.0f,     1.0f, 0.92f, 0.23f, 0.6f,
+          0.0f,  0.3f,  0.0f,     1.0f, 0.92f, 0.23f, 0.6f,
 
-          // --- TRIÁNGULO 3: AZUL (Atrás, Z = -0.4, Grande) ---
-          -0.6f, -0.3f, -0.4f,     0.0f, 0.0f, 1.0f, 0.6f,
-           0.6f, -0.3f, -0.4f,     0.0f, 0.0f, 1.0f, 0.6f,
-           0.0f,  0.5f, -0.4f,     0.0f, 0.0f, 1.0f, 0.6f
+          // --- TRIÁNGULO 3: GRANDE (Atrás, Z = -0.4) 
+          -0.6f, -0.3f, -0.4f,     0.4f, 0.7f, 1.0f, 0.6f,
+           0.6f, -0.3f, -0.4f,     0.4f, 0.7f, 1.0f, 0.6f,
+           0.0f,  0.5f, -0.4f,     0.4f, 0.7f, 1.0f, 0.6f
     };
 
     // Configurar VAO/VBO para los Triángulos
@@ -186,7 +230,7 @@ int main() {
         // Matriz de Modelo (Rotación suave)
         float t = (float)glfwGetTime();
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::rotate(model, t * 0.5f, glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::rotate(model, t * 0.2f, glm::vec3(0.0f, 1.0f, 0.0f));
 
         glm::mat4 mvp = projection * view * model;
         glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, glm::value_ptr(mvp));
