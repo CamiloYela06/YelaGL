@@ -17,7 +17,6 @@
 
 #include "shader.h"
 
-// Tamaño de la ventana
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 800;
 
@@ -38,47 +37,78 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
-// Variables de la cámara
-glm::vec3 cameraPos = glm::vec3(1.5f, 0.8f, 3.0f);
-glm::vec3 cameraFront = glm::normalize(
-    glm::vec3(0.0f, 0.0f, 0.0f) - cameraPos
-);
+// =========================================================================
+// VARIABLES DE LA CÁMARA (Vista lateral/diagonal para apreciar el lanzamiento)
+// =========================================================================
+glm::vec3 cameraPos = glm::vec3(0.0f, 1.5f, 7.5f);
+glm::vec3 cameraFront = glm::normalize(glm::vec3(0.0f, 0.2f, 0.0f) - cameraPos);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-float cameraSpeed = 2.5f;
+float cameraSpeed = 3.5f;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-// Procesar movimiento de la cámara (WASD y flechas)
+// =========================================================================
+// VARIABLES DE LA CURVA DE BÉZIER (TRAYECTORIA DE LANZAMIENTO)
+// =========================================================================
+// P0: Punto de origen (donde se lanza el hacha)
+glm::vec3 P0 = glm::vec3(-4.0f, -0.5f, 1.5f);
+// P1: Primer punto de control (impulso inicial hacia arriba y adelante)
+glm::vec3 P1 = glm::vec3(-1.5f, 2.2f, 0.5f);
+// P2: Segundo punto de control (punto más alto del arco antes de caer)
+glm::vec3 P2 = glm::vec3(1.5f, 2.0f, -0.5f);
+// P3: Punto de destino (el objetivo donde impacta el hacha)
+glm::vec3 P3 = glm::vec3(3.8f, -0.3f, -1.5f);
+
+float bezierT = 0.0f;         // Progreso en la curva: 0.0 (inicio) -> 1.0 (objetivo)
+float throwSpeed = 0.75f;     // Velocidad del lanzamiento (menor = más lento)
+
+// Función que calcula la posición exacta 3D en una Curva de Bézier Cúbica para un t en [0, 1]
+glm::vec3 calcularBezierCubica(float t, glm::vec3 p0, glm::vec3 p1, glm::vec3 p2, glm::vec3 p3) {
+    float u = 1.0f - t;
+    float tt = t * t;
+    float uu = u * u;
+    float uuu = uu * u;
+    float ttt = tt * t;
+
+    glm::vec3 punto = uuu * p0;        // (1 - t)^3 * P0
+    punto += 3.0f * uu * t * p1;       // 3(1 - t)^2 * t * P1
+    punto += 3.0f * u * tt * p2;       // 3(1 - t) * t^2 * P2
+    punto += ttt * p3;                 // t^3 * P3
+
+    return punto;
+}
+
 void processInput(GLFWwindow* window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    glm::vec3 front = glm::normalize(glm::vec3(cameraFront.x, 0.0f, cameraFront.z));
+    // Tecla R: Reiniciar el lanzamiento del hacha desde P0
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+        bezierT = 0.0f;
+    }
+
+    glm::vec3 front = glm::normalize(cameraFront);
     glm::vec3 right = glm::normalize(glm::cross(front, cameraUp));
     float velocity = cameraSpeed * deltaTime;
 
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
         cameraPos += front * velocity;
-
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
         cameraPos -= front * velocity;
-
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
         cameraPos -= right * velocity;
-
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
         cameraPos += right * velocity;
 }
 
-// Cargar textura incrustada en el .glb con estilo PSX (GL_NEAREST)
 unsigned int loadTextureFromMemory(const unsigned char* data, size_t size) {
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(false);
     unsigned char* bytes = stbi_load_from_memory(data, static_cast<int>(size), &width, &height, &nrChannels, 4);
 
     if (bytes == nullptr) {
-        std::cerr << "Error al cargar textura del GLB: " << stbi_failure_reason() << std::endl;
+        std::cerr << "Error al decodificar textura del GLB: " << stbi_failure_reason() << std::endl;
         return 0;
     }
 
@@ -87,10 +117,8 @@ unsigned int loadTextureFromMemory(const unsigned char* data, size_t size) {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
 
-    // Estilo retro PSX (sin suavizado)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
@@ -104,7 +132,6 @@ unsigned int loadTextureFromMemory(const unsigned char* data, size_t size) {
     return texture;
 }
 
-// Cargar el modelo .glb con fastgltf
 std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
     std::vector<MeshGL> meshes;
 
@@ -121,7 +148,6 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
         return meshes;
     }
 
-    // Extraer texturas incrustadas
     std::vector<unsigned int> loadedTextures(asset->images.size(), 0);
     for (size_t i = 0; i < asset->images.size(); ++i) {
         const auto& img = asset->images[i];
@@ -135,7 +161,6 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
         }
     }
 
-    // Extraer geometría e índices
     for (const auto& mesh : asset->meshes) {
         for (const auto& primitive : mesh.primitives) {
             auto posIt = primitive.findAttribute("POSITION");
@@ -195,11 +220,9 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, glMesh.ebo);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
 
-            // location = 0 -> aPos
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, pos));
             glEnableVertexAttribArray(0);
 
-            // location = 1 -> aTexCoord
             glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, uv));
             glEnableVertexAttribArray(1);
 
@@ -213,95 +236,82 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
     return meshes;
 }
 
-void renderFrame(GLFWwindow* window, Shader& shader, const std::vector<MeshGL>& meshes) {
-    // Actualizar el tiempo del fotograma y procesar la entrada.
-    float currentFrame = (float)glfwGetTime();
-    deltaTime = currentFrame - lastFrame;
-    lastFrame = currentFrame;
-
-    processInput(window);
-
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    shader.use();
-
-    // Calcular las transformaciones de cámara y del modelo.
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(window, &width, &height);
-    float aspect = width > 0 ? (float)width / (float)height : 1.0f;
-    glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 100.0f);
-
-    glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-
-    float t = (float)glfwGetTime();
-    glm::mat4 model = glm::mat4(1.0f);
-    model = glm::rotate(model, t * 0.2f, glm::vec3(0.0f, 1.0f, 0.0f));
-    model = glm::scale(model, glm::vec3(0.09f));
-    glm::mat4 mvp = projection * view * model;
-    shader.setMat4("uMVP", mvp);
-
-    // Dibujar cada malla con su textura.
-    for (const auto& mesh : meshes) {
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, mesh.textureID);
-        glBindVertexArray(mesh.vao);
-        glDrawElements(GL_TRIANGLES, mesh.indexCount, GL_UNSIGNED_INT, 0);
-    }
-
-    glBindVertexArray(0);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glfwSwapBuffers(window);
-    glfwPollEvents();
-}
-
 int main() {
     std::cout << "==========================================" << std::endl;
-    std::cout << " Proyecto: Modelo GLB_ CAMILO YELA" << std::endl;
+    std::cout << " Proyecto: Lanzamiento Bezier - CAMILO YELA" << std::endl;
+    std::cout << " Controles: WASD / Flechas = Camara | R = Relanzar" << std::endl;
     std::cout << "==========================================" << std::endl;
 
-    if (!glfwInit()) {
-        std::cerr << "Error al inicializar GLFW" << std::endl;
-        return -1;
-    }
+    if (!glfwInit()) return -1;
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_DEPTH_BITS, 24);
 
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Modelo GLB_ CAMILO YELA", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Lanzamiento Bezier - CAMILO YELA", nullptr, nullptr);
     if (window == nullptr) {
-        std::cerr << "Error al crear la ventana GLFW" << std::endl;
         glfwTerminate();
         return -1;
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cerr << "Error al inicializar GLAD" << std::endl;
-        return -1;
-    }
-
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) return -1;
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    // 3. Cargar Shaders desde la clase Shader
     Shader shader("default.vert", "default.frag");
     shader.use();
     shader.setInt("texture1", 0);
-
-    // 4. Cargar el hacha PSX (.glb)
-    std::vector<MeshGL> hatchetMeshes = loadGLB("psx_hatchet_low-poly.glb");
-    if (hatchetMeshes.empty()) {
-        std::cerr << "No se cargaron mallas desde psx_hatchet_low-poly.glb" << std::endl;
-    }
-
+    std::vector hatchetMeshes = loadGLB("psx_hatchet_low-poly.glb");
     while (!glfwWindowShouldClose(window)) {
-        renderFrame(window, shader, hatchetMeshes);
+        float currentFrame = (float)glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+        processInput(window);
+        // Avanzar el progreso 't' en la curva de Bézier hasta llegar a 1.0 (el objetivo)
+        if (bezierT < 1.0f) {
+            bezierT += throwSpeed * deltaTime;
+            if (bezierT > 1.0f) {
+                bezierT = 1.0f; // Se clava/detiene en el punto objetivo P3
+            }
+        }
+        // Calcular la posición 3D actual del hacha sobre la curva
+        glm::vec3 posActual = calcularBezierCubica(bezierT, P0, P1, P2, P3);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        shader.use();
+        int width = 0, height = 0;
+        glfwGetFramebufferSize(window, &width, &height);
+        float aspect = width > 0 ? (float)width / (float)height : 1.0f;
+        glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 100.0f);
+        glm::mat4 view = glm::lookAt(
+            cameraPos,
+            cameraPos + cameraFront,
+            cameraUp
+        );
+        // MATRIZ DE MODELO:
+        // 1. Trasladamos el hacha al punto calculado en la Curva de Bézier
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, posActual);
+        // 2. Orientación fija de lanzamiento (sin girar sobre su eje)
+        // Ajusta este ángulo si quieres que el filo apunte hacia la derecha (+X)
+        model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        // 3. Escala de 0.9f que configuraste
+        model = glm::scale(model, glm::vec3(0.9f));
+        glm::mat4 mvp = projection * view * model;
+        shader.setMat4("uMVP", mvp);
+        for (const auto& mesh : hatchetMeshes) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, mesh.textureID);
+            glBindVertexArray(mesh.vao);
+            glDrawElements(GL_TRIANGLES, mesh.indexCount, GL_UNSIGNED_INT, 0);
+        }
+        glBindVertexArray(0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glfwSwapBuffers(window);
+        glfwPollEvents();
     }
-    // Liberar recursos
     for (const auto& mesh : hatchetMeshes) {
         glDeleteVertexArrays(1, &mesh.vao);
         glDeleteBuffers(1, &mesh.vbo);
@@ -314,4 +324,3 @@ int main() {
     glfwTerminate();
     return 0;
 }
-
