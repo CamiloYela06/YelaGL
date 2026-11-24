@@ -16,6 +16,9 @@
     <Filter Include="Archivos de origen\Shaders">
       <UniqueIdentifier>{e2d5c461-c599-4ac2-ab8f-92e015b9f685}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Archivos de recursos\Texturas">
+      <UniqueIdentifier>{a7c552f0-91c1-48c5-a4b6-74f02828d986}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="glad.c">
@@ -27,10 +30,26 @@
     <ClCompile Include="stb.cpp">
       <Filter>Archivos de recursos</Filter>
     </ClCompile>
+    <ClCompile Include="shader.cpp">
+      <Filter>Archivos de recursos</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="default.vert">
       <Filter>Archivos de origen\Shaders</Filter>
     </None>
+    <None Include="default.frag">
+      <Filter>Archivos de origen\Shaders</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="texturaTIGRES.jpg">
+      <Filter>Archivos de recursos\Texturas</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="shader.h">
+      <Filter>Archivos de recursos</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

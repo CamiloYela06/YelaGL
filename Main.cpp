@@ -1,6 +1,7 @@
 #include <iostream>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <stb/stb_image.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -18,20 +19,21 @@ const unsigned int SCR_HEIGHT = 800;
 const char* vertexShaderSource =
 "#version 330 core\n"
 "layout (location = 0) in vec3 aPos;\n"
-"layout (location = 1) in vec4 aColor;\n"
-"out vec4 ourColor;\n"
+"layout (location = 1) in vec2 aTexCoord;\n"
+"out vec2 TexCoord;\n"
 "uniform mat4 uMVP;\n"
 "void main() {\n"
 "    gl_Position = uMVP * vec4(aPos, 1.0);\n"
-"    ourColor = aColor;\n"
+"    TexCoord = aTexCoord;\n"
 "}\0";
         
 const char* fragmentShaderSource =
 "#version 330 core\n"
-"in vec4 ourColor;\n"
+"in vec2 TexCoord;\n"
 "out vec4 FragColor;\n"
+"uniform sampler2D texture1;\n"
 "void main() {\n"
-"    FragColor = ourColor;\n"
+"    FragColor = texture(texture1, TexCoord);\n"
 "}\0";
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
@@ -153,22 +155,42 @@ int main() {
     // Alineados de la base en Y = -0.3, organizados uno detrás de otro en Z y con tamaños crecientes.
     // Cada bloque de 7 floats corresponde a: pos.x, pos.y, pos.z, r, g, b, a.
     // Las coordenadas Z se usan para situar los triángulos a distintas profundidades.
+  // Vértices de la pirámide
+// Cada vértice tiene: X, Y, Z, U, V
     float verticesTriangulos[] = {
-        // --- TRIÁNGULO 1: (Al frente, Z = 0.4, Pequeño) ---
-        // Posición (X, Y, Z)      Color (R, G, B, A)
-        -0.2f, -0.3f,  0.4f,     0.0f, 1.0f, 0.0f, 0.6f,
-         0.2f, -0.3f,  0.4f,     0.0f, 1.0f, 0.0f, 0.6f,
-         0.0f,  0.1f,  0.4f,     0.0f, 1.0f, 0.0f, 0.6f,
 
-         // --- TRIÁNGULO 2: MEDIANO (En el centro, Z = 0.0) 
-         -0.4f, -0.3f,  0.0f,     1.0f, 0.92f, 0.23f, 0.6f,
-          0.4f, -0.3f,  0.0f,     1.0f, 0.92f, 0.23f, 0.6f,
-          0.0f,  0.3f,  0.0f,     1.0f, 0.92f, 0.23f, 0.6f,
+        // CARA FRONTAL
+        // Punta
+         0.0f,  0.6f,  0.0f,   0.5f, 1.0f,
+         // Base izquierda
+         -0.5f, -0.4f,  0.5f,   0.0f, 0.0f,
+         // Base derecha
+          0.5f, -0.4f,  0.5f,   1.0f, 0.0f,
 
-          // --- TRIÁNGULO 3: GRANDE (Atrás, Z = -0.4) 
-          -0.6f, -0.3f, -0.4f,     0.4f, 0.7f, 1.0f, 0.6f,
-           0.6f, -0.3f, -0.4f,     0.4f, 0.7f, 1.0f, 0.6f,
-           0.0f,  0.5f, -0.4f,     0.4f, 0.7f, 1.0f, 0.6f
+          // CARA DERECHA
+           0.0f,  0.6f,  0.0f,   0.5f, 1.0f,
+           0.5f, -0.4f,  0.5f,   0.0f, 0.0f,
+           0.5f, -0.4f, -0.5f,   1.0f, 0.0f,
+
+           // CARA TRASERA
+            0.0f,  0.6f,  0.0f,   0.5f, 1.0f,
+            0.5f, -0.4f, -0.5f,   0.0f, 0.0f,
+           -0.5f, -0.4f, -0.5f,   1.0f, 0.0f,
+
+           // CARA IZQUIERDA
+            0.0f,  0.6f,  0.0f,   0.5f, 1.0f,
+           -0.5f, -0.4f, -0.5f,   0.0f, 0.0f,
+           -0.5f, -0.4f,  0.5f,   1.0f, 0.0f,
+
+           // BASE - TRIANGULO 1
+           -0.5f, -0.4f,  0.5f,   0.0f, 0.0f,
+            0.5f, -0.4f,  0.5f,   1.0f, 0.0f,
+            0.5f, -0.4f, -0.5f,   1.0f, 1.0f,
+
+            // BASE - TRIANGULO 2
+            -0.5f, -0.4f,  0.5f,   0.0f, 0.0f,
+             0.5f, -0.4f, -0.5f,   1.0f, 1.0f,
+            -0.5f, -0.4f, -0.5f,   0.0f, 1.0f
     };
 
     // Configurar VAO/VBO para los Triángulos
@@ -186,15 +208,15 @@ int main() {
     //  size = 3 (x,y,z)
     //  type = GL_FLOAT
     //  normalized = GL_FALSE (no normalizamos los floats)
-    //  stride = 7 * sizeof(float) (distancia entre vértices consecutivos en bytes)
+    //  stride = 5 * sizeof(float) (distancia entre vértices consecutivos en bytes)
     //  pointer = (void*)0 (offset dentro del VBO donde empiezan las posiciones)
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     // Describir el formato del atributo de color:
     //  index = 1 (layout location 1)
-    //  size = 4 (r,g,b,a)
+    //  size = 2 (u,v)
     //  pointer = offset de 3 floats desde el inicio del vértice
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
     // Desenlazar para evitar modificaciones accidentales desde fuera de la configuración.
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -202,8 +224,62 @@ int main() {
 
     int mvpLoc = glGetUniformLocation(shaderProgram, "uMVP");
 
+    // Indicar que la textura se usará desde la unidad 0
+    glUseProgram(shaderProgram);
+    glUniform1i(glGetUniformLocation(shaderProgram, "texture1"), 0);
+
+    //Textura
+
+    int width, height, nrChannels;
+	unsigned char* bytes = stbi_load("texturaTIGRES.jpg", &width, &height, &nrChannels, 0);
+
+    if (bytes == nullptr) {
+        std::cerr << "Error al cargar texturaTIGRES.jpg: "
+            << stbi_failure_reason() << std::endl;
+        return -1;
+    }
+
+	// Crear y configurar la textura
+    GLuint texture;
+	glGenTextures(1, &texture);
+	glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+	// Configurar parámetros de la textura
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    // Usar el formato correspondiente a la imagen
+    GLenum formato = (nrChannels == 4) ? GL_RGBA : GL_RGB;
+
+    // IMPORTANTE: ajustar la alineación de los píxeles
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, formato, width, height, 0, formato, GL_UNSIGNED_BYTE, bytes);  
+
+    // Generar mipmaps mientras la textura sigue enlazada
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    // Liberar los datos de la imagen una sola vez
+    stbi_image_free(bytes);
+
+    // Desenlazar la textura
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+
     // 5. RENDER LOOP
     while (!glfwWindowShouldClose(window)) {
+
+        // Calcular el tiempo transcurrido entre fotogramas
+        float currentFrame = (float)glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
+        // Leer las teclas de movimiento
+        processInput(window);
 
         // Establecer el color de fondo que se usará al limpiar el buffer de color.
         // glClearColor define el color utilizado por glClear(GL_COLOR_BUFFER_BIT).
@@ -220,11 +296,11 @@ int main() {
         float aspect = width > 0 ? (float)width / (float)height : 1.0f;
         glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 100.0f);
 
-        // Matriz de Vista
+        // Matriz de Vista: cámara móvil
         glm::mat4 view = glm::lookAt(
-            glm::vec3(1.5f, 0.8f, 3.0f),
-            glm::vec3(0.0f, 0.0f, 0.0f),
-            glm::vec3(0.0f, 1.0f, 0.0f)
+            cameraPos,
+            cameraPos + cameraFront,
+            cameraUp
         );
 
         // Matriz de Modelo (Rotación suave)
@@ -241,8 +317,13 @@ int main() {
         // 3) enlazar el VAO que contiene la descripción de atributos y los VBOs
         // 4) dibujar con glDrawArrays (GL_TRIANGLES toma grupos de 3 vértices)
         // 5) intercambiar buffers y procesar eventos
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+
         glBindVertexArray(vaoTriangulos);
-        glDrawArrays(GL_TRIANGLES, 0, 9);
+        glDrawArrays(GL_TRIANGLES, 0, 18);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -252,6 +333,7 @@ int main() {
     glDeleteVertexArrays(1, &vaoTriangulos);
     glDeleteBuffers(1, &vboTriangulos);
     glDeleteProgram(shaderProgram);
+	glDeleteTextures(1, &texture);
 
     glfwTerminate();
     return 0;

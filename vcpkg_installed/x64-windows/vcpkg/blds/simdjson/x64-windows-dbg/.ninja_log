@@ -1,0 +1,6 @@
+# ninja log v7
+11	460	8172147709220365	CMakeFiles/simdjson.dir/cmake_pch.cxx.obj	8534712f532c170
+462	1091	8172147713733031	CMakeFiles/simdjson.dir/src/simdjson.cpp.obj	6b102f93ca17e6bb
+1093	1558	8172147724390429	simdjson.dll	aea730a17e828b9f
+1093	1558	8172147724390429	simdjson.lib	aea730a17e828b9f
+1559	1788	8172147724701446	CMakeFiles/install.util	1c946b85386e64d4

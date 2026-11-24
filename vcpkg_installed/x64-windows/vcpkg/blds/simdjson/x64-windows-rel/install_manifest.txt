@@ -1,0 +1,8 @@
+C:/Users/yelac/Downloads/YelaGL/vcpkg_installed/x64-windows/vcpkg/pkgs/simdjson_x64-windows/include/simdjson.h
+C:/Users/yelac/Downloads/YelaGL/vcpkg_installed/x64-windows/vcpkg/pkgs/simdjson_x64-windows/lib/simdjson.lib
+C:/Users/yelac/Downloads/YelaGL/vcpkg_installed/x64-windows/vcpkg/pkgs/simdjson_x64-windows/bin/simdjson.dll
+C:/Users/yelac/Downloads/YelaGL/vcpkg_installed/x64-windows/vcpkg/pkgs/simdjson_x64-windows/lib/cmake/simdjson/simdjson-config.cmake
+C:/Users/yelac/Downloads/YelaGL/vcpkg_installed/x64-windows/vcpkg/pkgs/simdjson_x64-windows/lib/cmake/simdjson/simdjson-config-version.cmake
+C:/Users/yelac/Downloads/YelaGL/vcpkg_installed/x64-windows/vcpkg/pkgs/simdjson_x64-windows/lib/cmake/simdjson/simdjsonTargets.cmake
+C:/Users/yelac/Downloads/YelaGL/vcpkg_installed/x64-windows/vcpkg/pkgs/simdjson_x64-windows/lib/cmake/simdjson/simdjsonTargets-release.cmake
+C:/Users/yelac/Downloads/YelaGL/vcpkg_installed/x64-windows/vcpkg/pkgs/simdjson_x64-windows/lib/pkgconfig/simdjson.pc

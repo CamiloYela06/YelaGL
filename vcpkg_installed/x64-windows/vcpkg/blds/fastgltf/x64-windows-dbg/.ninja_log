@@ -1,0 +1,7 @@
+# ninja log v7
+21	2124	8172147886321987	CMakeFiles/fastgltf.dir/src/base64.cpp.obj	92247b4c9cf53069
+30	2762	8172147886405204	CMakeFiles/fastgltf.dir/src/io.cpp.obj	b285e6eb930fb678
+12	3945	8172147886229513	CMakeFiles/fastgltf.dir/src/fastgltf.cpp.obj	2f993e976a788a4b
+3946	4560	8172147931364648	fastgltf.dll	dd4e3b04908835c6
+3946	4560	8172147931364648	fastgltf.lib	dd4e3b04908835c6
+4561	4868	8172147931719625	CMakeFiles/install.util	2d01afca5b260e44

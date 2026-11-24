@@ -1,0 +1,80 @@
+Package: stb
+Version: 2024-07-29
+Port-Version: 1
+Architecture: x64-windows
+Multi-Arch: same
+Abi: c95c3ede99e0b460144e1c26d928b7d9e833c900d5730cac9858f5e2e8b690fa
+Description: public domain header-only libraries
+Status: purge ok not-installed
+
+Package: vcpkg-cmake-config
+Version: 2026-07-21
+Architecture: x64-windows
+Multi-Arch: same
+Abi: a64b8e465b12b3f076d70b620d8c132b49d0fd3637617118e436d45d412254fb
+Status: install ok installed
+
+Package: vcpkg-cmake
+Version: 2024-04-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 9b6fcae2dbba4789b3ef558314657aaf0b67eb7a87314796dd94dd4b27003700
+Status: install ok installed
+
+Package: nlohmann-json
+Version: 3.12.0
+Port-Version: 2
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 09179b12c49615b34c5a567bdd74a61ff4e505ada851107dc192afe0272e5add
+Description: JSON for Modern C++
+Status: purge ok not-installed
+
+Package: simdjson
+Version: 4.6.4
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 4539b2009e635bedcbe525799538e61966debbcfb57cc3be8779c0236839dd5e
+Description: An extremely fast JSON library that can parse gigabytes of JSON per second
+Default-Features: deprecated, exceptions, threads, utf8-validation
+Status: install ok installed
+
+Package: simdjson
+Feature: deprecated
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable deprecated APIs
+Status: install ok installed
+
+Package: simdjson
+Feature: exceptions
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable exception-throwing interface
+Status: install ok installed
+
+Package: simdjson
+Feature: threads
+Architecture: x64-windows
+Multi-Arch: same
+Description: Link with thread support
+Status: install ok installed
+
+Package: simdjson
+Feature: utf8-validation
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable UTF-8 validation
+Status: install ok installed
+
+Package: fastgltf
+Version: 0.9.0
+Depends: simdjson, vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: c4d1042303c81f8cb9a0ae81b368e05563208e7ae1bcf493d0e5d7afbc8686ee
+Description: A modern C++17 glTF 2.0 library focused on speed, correctness, and usability
+Status: install ok installed
+
