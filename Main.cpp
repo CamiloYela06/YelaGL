@@ -1,4 +1,8 @@
 #include <iostream>
+#include <vector>
+#include <string>
+#include <filesystem>
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <stb/stb_image.h>
@@ -7,34 +11,28 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <fstream>
-#include <sstream>
-#include <string>
+#include <fastgltf/core.hpp>
+#include <fastgltf/types.hpp>
+#include <fastgltf/tools.hpp>
+
+#include "shader.h"
 
 // Tamaño de la ventana
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 800;
 
-// Shaders básicos
-const char* vertexShaderSource =
-"#version 330 core\n"
-"layout (location = 0) in vec3 aPos;\n"
-"layout (location = 1) in vec2 aTexCoord;\n"
-"out vec2 TexCoord;\n"
-"uniform mat4 uMVP;\n"
-"void main() {\n"
-"    gl_Position = uMVP * vec4(aPos, 1.0);\n"
-"    TexCoord = aTexCoord;\n"
-"}\0";
-        
-const char* fragmentShaderSource =
-"#version 330 core\n"
-"in vec2 TexCoord;\n"
-"out vec4 FragColor;\n"
-"uniform sampler2D texture1;\n"
-"void main() {\n"
-"    FragColor = texture(texture1, TexCoord);\n"
-"}\0";
+struct MeshGL {
+    unsigned int vao = 0;
+    unsigned int vbo = 0;
+    unsigned int ebo = 0;
+    GLsizei indexCount = 0;
+    unsigned int textureID = 0;
+};
+
+struct Vertex {
+    glm::vec3 pos;
+    glm::vec2 uv;
+};
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
@@ -51,62 +49,186 @@ float cameraSpeed = 2.5f;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-// Procesar movimiento de la cámara
+// Procesar movimiento de la cámara (WASD y flechas)
 void processInput(GLFWwindow* window) {
-
-    // Salir del programa
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    // Dirección horizontal de la cámara
-    glm::vec3 front = glm::normalize(
-        glm::vec3(cameraFront.x, 0.0f, cameraFront.z)
-    );
-
-    // Dirección hacia la derecha
-    glm::vec3 right = glm::normalize(
-        glm::cross(front, cameraUp)
-    );
-
-    // Movimiento con WASD
+    glm::vec3 front = glm::normalize(glm::vec3(cameraFront.x, 0.0f, cameraFront.z));
+    glm::vec3 right = glm::normalize(glm::cross(front, cameraUp));
     float velocity = cameraSpeed * deltaTime;
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
         cameraPos += front * velocity;
 
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
         cameraPos -= front * velocity;
 
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
         cameraPos -= right * velocity;
 
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
         cameraPos += right * velocity;
 }
 
+// Cargar textura incrustada en el .glb con estilo PSX (GL_NEAREST)
+unsigned int loadTextureFromMemory(const unsigned char* data, size_t size) {
+    int width, height, nrChannels;
+    stbi_set_flip_vertically_on_load(false);
+    unsigned char* bytes = stbi_load_from_memory(data, static_cast<int>(size), &width, &height, &nrChannels, 4);
+
+    if (bytes == nullptr) {
+        std::cerr << "Error al cargar textura del GLB: " << stbi_failure_reason() << std::endl;
+        return 0;
+    }
+
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    // Estilo retro PSX (sin suavizado)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, bytes);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    stbi_image_free(bytes);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return texture;
+}
+
+// Cargar el modelo .glb con fastgltf
+std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
+    std::vector<MeshGL> meshes;
+
+    fastgltf::Parser parser;
+    auto data = fastgltf::GltfDataBuffer::FromPath(path);
+    if (data.error() != fastgltf::Error::None) {
+        std::cerr << "Error al leer el archivo GLB: " << path << std::endl;
+        return meshes;
+    }
+
+    auto asset = parser.loadGltfBinary(data.get(), path.parent_path(), fastgltf::Options::None);
+    if (asset.error() != fastgltf::Error::None) {
+        std::cerr << "Error al parsear el GLB con fastgltf." << std::endl;
+        return meshes;
+    }
+
+    // Extraer texturas incrustadas
+    std::vector<unsigned int> loadedTextures(asset->images.size(), 0);
+    for (size_t i = 0; i < asset->images.size(); ++i) {
+        const auto& img = asset->images[i];
+        if (const auto* view = std::get_if<fastgltf::sources::BufferView>(&img.data)) {
+            const auto& bufferView = asset->bufferViews[view->bufferViewIndex];
+            const auto& buffer = asset->buffers[bufferView.bufferIndex];
+            if (const auto* bytes = std::get_if<fastgltf::sources::Array>(&buffer.data)) {
+                const auto* ptr = reinterpret_cast<const unsigned char*>(bytes->bytes.data() + bufferView.byteOffset);
+                loadedTextures[i] = loadTextureFromMemory(ptr, bufferView.byteLength);
+            }
+        }
+    }
+
+    // Extraer geometría e índices
+    for (const auto& mesh : asset->meshes) {
+        for (const auto& primitive : mesh.primitives) {
+            auto posIt = primitive.findAttribute("POSITION");
+            if (posIt == primitive.attributes.end()) continue;
+
+            const auto& posAccessor = asset->accessors[posIt->accessorIndex];
+            std::vector<Vertex> vertices(posAccessor.count);
+
+            fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(
+                asset.get(), posAccessor, [&](fastgltf::math::fvec3 pos, size_t idx) {
+                    vertices[idx].pos = glm::vec3(pos.x(), pos.y(), pos.z());
+                    vertices[idx].uv = glm::vec2(0.0f, 0.0f);
+                });
+
+            auto uvIt = primitive.findAttribute("TEXCOORD_0");
+            if (uvIt != primitive.attributes.end()) {
+                const auto& uvAccessor = asset->accessors[uvIt->accessorIndex];
+                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec2>(
+                    asset.get(), uvAccessor, [&](fastgltf::math::fvec2 uv, size_t idx) {
+                        vertices[idx].uv = glm::vec2(uv.x(), uv.y());
+                    });
+            }
+
+            std::vector<unsigned int> indices;
+            if (primitive.indicesAccessor.has_value()) {
+                const auto& idxAccessor = asset->accessors[primitive.indicesAccessor.value()];
+                indices.resize(idxAccessor.count);
+                fastgltf::iterateAccessorWithIndex<std::uint32_t>(
+                    asset.get(), idxAccessor, [&](std::uint32_t index, size_t idx) {
+                        indices[idx] = index;
+                    });
+            }
+
+            MeshGL glMesh;
+            glMesh.indexCount = static_cast<GLsizei>(indices.size());
+
+            if (primitive.materialIndex.has_value()) {
+                const auto& mat = asset->materials[primitive.materialIndex.value()];
+                if (mat.pbrData.baseColorTexture.has_value()) {
+                    size_t texIdx = mat.pbrData.baseColorTexture->textureIndex;
+                    if (asset->textures[texIdx].imageIndex.has_value()) {
+                        size_t imgIdx = asset->textures[texIdx].imageIndex.value();
+                        glMesh.textureID = loadedTextures[imgIdx];
+                    }
+                }
+            }
+
+            glGenVertexArrays(1, &glMesh.vao);
+            glGenBuffers(1, &glMesh.vbo);
+            glGenBuffers(1, &glMesh.ebo);
+
+            glBindVertexArray(glMesh.vao);
+
+            glBindBuffer(GL_ARRAY_BUFFER, glMesh.vbo);
+            glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
+
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, glMesh.ebo);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+
+            // location = 0 -> aPos
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, pos));
+            glEnableVertexAttribArray(0);
+
+            // location = 1 -> aTexCoord
+            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, uv));
+            glEnableVertexAttribArray(1);
+
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glBindVertexArray(0);
+
+            meshes.push_back(glMesh);
+        }
+    }
+
+    return meshes;
+}
+
 int main() {
-    // Imprimir nombre del proyecto en consola
     std::cout << "==========================================" << std::endl;
-    std::cout << " Proyecto: Triangulos_ CAMILO YELA" << std::endl;
+    std::cout << " Proyecto: Modelo GLB_ CAMILO YELA" << std::endl;
     std::cout << "==========================================" << std::endl;
 
-    // 1. Inicialización de GLFW
     if (!glfwInit()) {
         std::cerr << "Error al inicializar GLFW" << std::endl;
         return -1;
     }
 
-    // Indicamos a GLFW la versión de OpenGL que queremos usar (3.3).
-    // Esto hace que el contexto creado exponga las funciones de esa versión.
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    // Seleccionamos el perfil CORE para excluir funciones obsoletas de compatibilidad.
-    // En perfil CORE algunas funciones antiguas (fixed-function pipeline) no están disponibles.
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_DEPTH_BITS, 24);
-    
-    // Crear la ventana con el nombre del proyecto y estudiante
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Triangulos_ CAMILO YELA", nullptr, nullptr);
+
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Modelo GLB_ CAMILO YELA", nullptr, nullptr);
     if (window == nullptr) {
         std::cerr << "Error al crear la ventana GLFW" << std::endl;
         glfwTerminate();
@@ -115,226 +237,79 @@ int main() {
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-    // 2. Cargar GLAD
-    // Cargar punteros a las funciones de OpenGL para la plataforma actual.
-    // IMPORTANTE: debe llamarse después de crear el contexto (glfwMakeContextCurrent).
-    // gladLoadGLLoader devuelve 0/1 según éxito; comprobamos el retorno para manejar errores.
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cerr << "Error al inicializar GLAD" << std::endl;
         return -1;
     }
 
-    // Activar Depth Test y Blending para transparencia Alpha
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // 3. Compilar Shaders
-    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-    // Tras compilar conviene comprobar el estado con glGetShaderiv(..., GL_COMPILE_STATUS, ...)
-    // y obtener mensajes con glGetShaderInfoLog en caso de error para depuración.
+    // 3. Cargar Shaders desde la clase Shader
+    Shader shader("default.vert", "default.frag");
+    shader.use();
+    shader.setInt("texture1", 0);
 
-    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
-    // Igual que con el vertex shader, comprobar GL_COMPILE_STATUS tras compilar.
-
-    unsigned int shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    // También es buena práctica comprobar el estado de enlace del programa con
-    // glGetProgramiv(shaderProgram, GL_LINK_STATUS) y usar glGetProgramInfoLog si falla.
-
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-    // 4. VÉRTICES DE LOS 3 TRIÁNGULOS
-    // Alineados de la base en Y = -0.3, organizados uno detrás de otro en Z y con tamaños crecientes.
-    // Cada bloque de 7 floats corresponde a: pos.x, pos.y, pos.z, r, g, b, a.
-    // Las coordenadas Z se usan para situar los triángulos a distintas profundidades.
-  // Vértices de la pirámide
-// Cada vértice tiene: X, Y, Z, U, V
-    float verticesTriangulos[] = {
-
-        // CARA FRONTAL
-        // Punta
-         0.0f,  0.6f,  0.0f,   0.5f, 1.0f,
-         // Base izquierda
-         -0.5f, -0.4f,  0.5f,   0.0f, 0.0f,
-         // Base derecha
-          0.5f, -0.4f,  0.5f,   1.0f, 0.0f,
-
-          // CARA DERECHA
-           0.0f,  0.6f,  0.0f,   0.5f, 1.0f,
-           0.5f, -0.4f,  0.5f,   0.0f, 0.0f,
-           0.5f, -0.4f, -0.5f,   1.0f, 0.0f,
-
-           // CARA TRASERA
-            0.0f,  0.6f,  0.0f,   0.5f, 1.0f,
-            0.5f, -0.4f, -0.5f,   0.0f, 0.0f,
-           -0.5f, -0.4f, -0.5f,   1.0f, 0.0f,
-
-           // CARA IZQUIERDA
-            0.0f,  0.6f,  0.0f,   0.5f, 1.0f,
-           -0.5f, -0.4f, -0.5f,   0.0f, 0.0f,
-           -0.5f, -0.4f,  0.5f,   1.0f, 0.0f,
-
-           // BASE - TRIANGULO 1
-           -0.5f, -0.4f,  0.5f,   0.0f, 0.0f,
-            0.5f, -0.4f,  0.5f,   1.0f, 0.0f,
-            0.5f, -0.4f, -0.5f,   1.0f, 1.0f,
-
-            // BASE - TRIANGULO 2
-            -0.5f, -0.4f,  0.5f,   0.0f, 0.0f,
-             0.5f, -0.4f, -0.5f,   1.0f, 1.0f,
-            -0.5f, -0.4f, -0.5f,   0.0f, 1.0f
-    };
-
-    // Configurar VAO/VBO para los Triángulos
-    unsigned int vaoTriangulos, vboTriangulos;
-    // Crear objetos de vértices: VAO guarda la configuración de atributos, VBO contiene los datos.
-    glGenVertexArrays(1, &vaoTriangulos);
-    glGenBuffers(1, &vboTriangulos);
-
-    glBindVertexArray(vaoTriangulos);
-    glBindBuffer(GL_ARRAY_BUFFER, vboTriangulos);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(verticesTriangulos), verticesTriangulos, GL_STATIC_DRAW);
-
-    // Describir el formato del atributo de posición:
-    //  index = 0 (coincide con layout(location = 0) en el vertex shader)
-    //  size = 3 (x,y,z)
-    //  type = GL_FLOAT
-    //  normalized = GL_FALSE (no normalizamos los floats)
-    //  stride = 5 * sizeof(float) (distancia entre vértices consecutivos en bytes)
-    //  pointer = (void*)0 (offset dentro del VBO donde empiezan las posiciones)
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    // Describir el formato del atributo de color:
-    //  index = 1 (layout location 1)
-    //  size = 2 (u,v)
-    //  pointer = offset de 3 floats desde el inicio del vértice
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    // Desenlazar para evitar modificaciones accidentales desde fuera de la configuración.
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
-    int mvpLoc = glGetUniformLocation(shaderProgram, "uMVP");
-
-    // Indicar que la textura se usará desde la unidad 0
-    glUseProgram(shaderProgram);
-    glUniform1i(glGetUniformLocation(shaderProgram, "texture1"), 0);
-
-    //Textura
-
-    int width, height, nrChannels;
-	unsigned char* bytes = stbi_load("texturaTIGRES.jpg", &width, &height, &nrChannels, 0);
-
-    if (bytes == nullptr) {
-        std::cerr << "Error al cargar texturaTIGRES.jpg: "
-            << stbi_failure_reason() << std::endl;
-        return -1;
+    // 4. Cargar el hacha PSX (.glb)
+    std::vector<MeshGL> hatchetMeshes = loadGLB("psx_hatchet_low-poly.glb");
+    if (hatchetMeshes.empty()) {
+        std::cerr << "No se cargaron mallas desde psx_hatchet_low-poly.glb" << std::endl;
     }
-
-	// Crear y configurar la textura
-    GLuint texture;
-	glGenTextures(1, &texture);
-	glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
-
-	// Configurar parámetros de la textura
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-    // Usar el formato correspondiente a la imagen
-    GLenum formato = (nrChannels == 4) ? GL_RGBA : GL_RGB;
-
-    // IMPORTANTE: ajustar la alineación de los píxeles
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-	glTexImage2D(GL_TEXTURE_2D, 0, formato, width, height, 0, formato, GL_UNSIGNED_BYTE, bytes);  
-
-    // Generar mipmaps mientras la textura sigue enlazada
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    // Liberar los datos de la imagen una sola vez
-    stbi_image_free(bytes);
-
-    // Desenlazar la textura
-    glBindTexture(GL_TEXTURE_2D, 0);
-
 
     // 5. RENDER LOOP
     while (!glfwWindowShouldClose(window)) {
-
-        // Calcular el tiempo transcurrido entre fotogramas
         float currentFrame = (float)glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        // Leer las teclas de movimiento
         processInput(window);
 
-        // Establecer el color de fondo que se usará al limpiar el buffer de color.
-        // glClearColor define el color utilizado por glClear(GL_COLOR_BUFFER_BIT).
-        // Además limpiamos el buffer de profundidad con GL_DEPTH_BUFFER_BIT porque
-        // hemos activado GL_DEPTH_TEST para obtener correcto orden de profundidad.
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glUseProgram(shaderProgram);
-
-        // Matriz de Proyección
+        shader.use();
+        // Matriz de Proyección (mismo FOV de 60° y aspect dinámico que tenías)
         int width = 0, height = 0;
         glfwGetFramebufferSize(window, &width, &height);
         float aspect = width > 0 ? (float)width / (float)height : 1.0f;
         glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 100.0f);
-
         // Matriz de Vista: cámara móvil
         glm::mat4 view = glm::lookAt(
             cameraPos,
             cameraPos + cameraFront,
             cameraUp
         );
-
-        // Matriz de Modelo (Rotación suave)
+        // Matriz de Modelo (Rotación suave igual a tu código)
         float t = (float)glfwGetTime();
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::rotate(model, t * 0.2f, glm::vec3(0.0f, 1.0f, 0.0f));
-
+        // Si el hacha sale muy grande o pequeña, descomenta la siguiente línea:
+        // model = glm::scale(model, glm::vec3(1.0f));
         glm::mat4 mvp = projection * view * model;
-        glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, glm::value_ptr(mvp));
-
-        // Pasos por frame:
-        // 1) limpiar buffers (ya hecho arriba con glClear)
-        // 2) usar el programa de shaders (glUseProgram)
-        // 3) enlazar el VAO que contiene la descripción de atributos y los VBOs
-        // 4) dibujar con glDrawArrays (GL_TRIANGLES toma grupos de 3 vértices)
-        // 5) intercambiar buffers y procesar eventos
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture);
-
-        glBindVertexArray(vaoTriangulos);
-        glDrawArrays(GL_TRIANGLES, 0, 18);
-
+        shader.setMat4("uMVP", mvp);
+        // Dibujar cada malla del .glb con su textura
+        for (const auto& mesh : hatchetMeshes) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, mesh.textureID);
+            glBindVertexArray(mesh.vao);
+            glDrawElements(GL_TRIANGLES, mesh.indexCount, GL_UNSIGNED_INT, 0);
+        }
+        glBindVertexArray(0);
         glBindTexture(GL_TEXTURE_2D, 0);
-
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
     // Liberar recursos
-    glDeleteVertexArrays(1, &vaoTriangulos);
-    glDeleteBuffers(1, &vboTriangulos);
-    glDeleteProgram(shaderProgram);
-	glDeleteTextures(1, &texture);
-
+    for (const auto& mesh : hatchetMeshes) {
+        glDeleteVertexArrays(1, &mesh.vao);
+        glDeleteBuffers(1, &mesh.vbo);
+        glDeleteBuffers(1, &mesh.ebo);
+        if (mesh.textureID != 0) {
+            glDeleteTextures(1, &mesh.textureID);
+        }
+    }
+    shader.destroy();
     glfwTerminate();
     return 0;
 }
+
