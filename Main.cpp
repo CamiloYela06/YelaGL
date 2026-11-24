@@ -213,6 +213,47 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
     return meshes;
 }
 
+void renderFrame(GLFWwindow* window, Shader& shader, const std::vector<MeshGL>& meshes) {
+    // Actualizar el tiempo del fotograma y procesar la entrada.
+    float currentFrame = (float)glfwGetTime();
+    deltaTime = currentFrame - lastFrame;
+    lastFrame = currentFrame;
+
+    processInput(window);
+
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    shader.use();
+
+    // Calcular las transformaciones de cámara y del modelo.
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    float aspect = width > 0 ? (float)width / (float)height : 1.0f;
+    glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 100.0f);
+
+    glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+
+    float t = (float)glfwGetTime();
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::rotate(model, t * 0.2f, glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::scale(model, glm::vec3(0.09f));
+    glm::mat4 mvp = projection * view * model;
+    shader.setMat4("uMVP", mvp);
+
+    // Dibujar cada malla con su textura.
+    for (const auto& mesh : meshes) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, mesh.textureID);
+        glBindVertexArray(mesh.vao);
+        glDrawElements(GL_TRIANGLES, mesh.indexCount, GL_UNSIGNED_INT, 0);
+    }
+
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+}
+
 int main() {
     std::cout << "==========================================" << std::endl;
     std::cout << " Proyecto: Modelo GLB_ CAMILO YELA" << std::endl;
@@ -257,47 +298,8 @@ int main() {
         std::cerr << "No se cargaron mallas desde psx_hatchet_low-poly.glb" << std::endl;
     }
 
-    // 5. RENDER LOOP
     while (!glfwWindowShouldClose(window)) {
-        float currentFrame = (float)glfwGetTime();
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
-
-        processInput(window);
-
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        shader.use();
-        // Matriz de Proyección (mismo FOV de 60° y aspect dinámico que tenías)
-        int width = 0, height = 0;
-        glfwGetFramebufferSize(window, &width, &height);
-        float aspect = width > 0 ? (float)width / (float)height : 1.0f;
-        glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 100.0f);
-        // Matriz de Vista: cámara móvil
-        glm::mat4 view = glm::lookAt(
-            cameraPos,
-            cameraPos + cameraFront,
-            cameraUp
-        );
-        // Matriz de Modelo (Rotación suave igual a tu código)
-        float t = (float)glfwGetTime();
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::rotate(model, t * 0.2f, glm::vec3(0.0f, 1.0f, 0.0f));
-        // Si el hacha sale muy grande o pequeña, descomenta la siguiente línea:
-        // model = glm::scale(model, glm::vec3(1.0f));
-        glm::mat4 mvp = projection * view * model;
-        shader.setMat4("uMVP", mvp);
-        // Dibujar cada malla del .glb con su textura
-        for (const auto& mesh : hatchetMeshes) {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, mesh.textureID);
-            glBindVertexArray(mesh.vao);
-            glDrawElements(GL_TRIANGLES, mesh.indexCount, GL_UNSIGNED_INT, 0);
-        }
-        glBindVertexArray(0);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+        renderFrame(window, shader, hatchetMeshes);
     }
     // Liberar recursos
     for (const auto& mesh : hatchetMeshes) {

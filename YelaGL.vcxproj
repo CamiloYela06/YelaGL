@@ -160,6 +160,7 @@
     <ClCompile Include="stb.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include=".github\copilot-instructions.md" />
     <None Include="default.frag" />
     <None Include="default.vert" />
   </ItemGroup>

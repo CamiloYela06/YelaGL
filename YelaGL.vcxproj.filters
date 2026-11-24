@@ -41,6 +41,7 @@
     <None Include="default.frag">
       <Filter>Archivos de origen\Shaders</Filter>
     </None>
+    <None Include=".github\copilot-instructions.md" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="texturaTIGRES.jpg">
