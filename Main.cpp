@@ -17,9 +17,11 @@
 
 #include "shader.h"
 
+// Dimensiones iniciales de la ventana.
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 800;
 
+// Identificadores de los recursos de GPU necesarios para dibujar una malla.
 struct MeshGL {
     unsigned int vao = 0;
     unsigned int vbo = 0;
@@ -28,40 +30,41 @@ struct MeshGL {
     unsigned int textureID = 0;
 };
 
+// Atributos de vértice que se envían a los shaders.
 struct Vertex {
     glm::vec3 pos;
     glm::vec2 uv;
 };
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    // Ajustar el área de dibujo al tamaño actual del framebuffer.
     glViewport(0, 0, width, height);
 }
 
-// =========================================================================
-// VARIABLES DE LA CÁMARA (Vista lateral/diagonal para apreciar el lanzamiento)
-// =========================================================================
-glm::vec3 cameraPos = glm::vec3(0.0f, 1.5f, 7.5f);
-glm::vec3 cameraFront = glm::normalize(glm::vec3(0.0f, 0.2f, 0.0f) - cameraPos);
+// VARIABLES DE LA CÁMARA
+
+glm::vec3 cameraPos = glm::vec3(0.0f, 2.2f, 11.5f);
+glm::vec3 cameraFront = glm::normalize(glm::vec3(0.0f, 0.5f, 0.0f) - cameraPos);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-float cameraSpeed = 3.5f;
+float cameraSpeed = 4.0f;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-// =========================================================================
-// VARIABLES DE LA CURVA DE BÉZIER (TRAYECTORIA DE LANZAMIENTO)
-// =========================================================================
-// P0: Punto de origen (donde se lanza el hacha)
-glm::vec3 P0 = glm::vec3(-4.0f, -0.5f, 1.5f);
-// P1: Primer punto de control (impulso inicial hacia arriba y adelante)
-glm::vec3 P1 = glm::vec3(-1.5f, 2.2f, 0.5f);
-// P2: Segundo punto de control (punto más alto del arco antes de caer)
-glm::vec3 P2 = glm::vec3(1.5f, 2.0f, -0.5f);
-// P3: Punto de destino (el objetivo donde impacta el hacha)
-glm::vec3 P3 = glm::vec3(3.8f, -0.3f, -1.5f);
 
-float bezierT = 0.0f;         // Progreso en la curva: 0.0 (inicio) -> 1.0 (objetivo)
-float throwSpeed = 0.75f;     // Velocidad del lanzamiento (menor = más lento)
+// VARIABLES DE LA CURVA DE BÉZIER (RECORRIDO LARGO DE LANZAMIENTO)
+
+// P0: Punto de origen lejano a la izquierda
+glm::vec3 P0 = glm::vec3(-4.5f, -0.5f, 3.0f);
+// P1: Impulso inicial alto hacia adelante
+glm::vec3 P1 = glm::vec3(-3.0f, 4.0f, 1.0f);
+// P2: Segundo punto de control manteniendo altura antes de descender
+glm::vec3 P2 = glm::vec3(3.0f, 3.8f, -1.0f);
+// P3: Punto de destino lejano a la derecha (objetivo)
+glm::vec3 P3 = glm::vec3(4.5f, -0.5f, -3.0f);
+
+float bezierT = 0.0f;         // Progreso en la curva: 0.0 -> 1.0
+float throwSpeed = 0.30f;     
 
 // Función que calcula la posición exacta 3D en una Curva de Bézier Cúbica para un t en [0, 1]
 glm::vec3 calcularBezierCubica(float t, glm::vec3 p0, glm::vec3 p1, glm::vec3 p2, glm::vec3 p3) {
@@ -79,7 +82,9 @@ glm::vec3 calcularBezierCubica(float t, glm::vec3 p0, glm::vec3 p1, glm::vec3 p2
     return punto;
 }
 
+
 void processInput(GLFWwindow* window) {
+    // Cerrar la ventana al pulsar Escape.
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
@@ -88,6 +93,7 @@ void processInput(GLFWwindow* window) {
         bezierT = 0.0f;
     }
 
+    // Calcular direcciones de movimiento y adaptar el desplazamiento al tiempo del fotograma.
     glm::vec3 front = glm::normalize(cameraFront);
     glm::vec3 right = glm::normalize(glm::cross(front, cameraUp));
     float velocity = cameraSpeed * deltaTime;
@@ -105,6 +111,7 @@ void processInput(GLFWwindow* window) {
 unsigned int loadTextureFromMemory(const unsigned char* data, size_t size) {
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(false);
+    // Decodificar la imagen en formato RGBA desde los datos incrustados en el GLB.
     unsigned char* bytes = stbi_load_from_memory(data, static_cast<int>(size), &width, &height, &nrChannels, 4);
 
     if (bytes == nullptr) {
@@ -112,6 +119,7 @@ unsigned int loadTextureFromMemory(const unsigned char* data, size_t size) {
         return 0;
     }
 
+    // Crear la textura y configurar filtrado y repetición.
     GLuint texture;
     glGenTextures(1, &texture);
     glActiveTexture(GL_TEXTURE0);
@@ -122,6 +130,7 @@ unsigned int loadTextureFromMemory(const unsigned char* data, size_t size) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
+    // Subir los píxeles a OpenGL y liberar el búfer temporal de stb_image.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, bytes);
     glGenerateMipmap(GL_TEXTURE_2D);
@@ -135,6 +144,7 @@ unsigned int loadTextureFromMemory(const unsigned char* data, size_t size) {
 std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
     std::vector<MeshGL> meshes;
 
+    // Leer y parsear el archivo GLB.
     fastgltf::Parser parser;
     auto data = fastgltf::GltfDataBuffer::FromPath(path);
     if (data.error() != fastgltf::Error::None) {
@@ -148,6 +158,7 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
         return meshes;
     }
 
+    // Cargar las imágenes incrustadas y guardar sus identificadores de OpenGL.
     std::vector<unsigned int> loadedTextures(asset->images.size(), 0);
     for (size_t i = 0; i < asset->images.size(); ++i) {
         const auto& img = asset->images[i];
@@ -161,6 +172,7 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
         }
     }
 
+    // Convertir cada primitiva del modelo en vértices e índices para OpenGL.
     for (const auto& mesh : asset->meshes) {
         for (const auto& primitive : mesh.primitives) {
             auto posIt = primitive.findAttribute("POSITION");
@@ -184,6 +196,7 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
                     });
             }
 
+            // Copiar los índices si la primitiva los incluye.
             std::vector<unsigned int> indices;
             if (primitive.indicesAccessor.has_value()) {
                 const auto& idxAccessor = asset->accessors[primitive.indicesAccessor.value()];
@@ -197,6 +210,7 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
             MeshGL glMesh;
             glMesh.indexCount = static_cast<GLsizei>(indices.size());
 
+            // Asociar a la malla la textura base indicada por su material.
             if (primitive.materialIndex.has_value()) {
                 const auto& mat = asset->materials[primitive.materialIndex.value()];
                 if (mat.pbrData.baseColorTexture.has_value()) {
@@ -208,6 +222,7 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
                 }
             }
 
+            // Crear los búferes de GPU y subir los datos de la malla.
             glGenVertexArrays(1, &glMesh.vao);
             glGenBuffers(1, &glMesh.vbo);
             glGenBuffers(1, &glMesh.ebo);
@@ -220,6 +235,7 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, glMesh.ebo);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
 
+            // Indicar al shader dónde están la posición y las coordenadas UV.
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, pos));
             glEnableVertexAttribArray(0);
 
@@ -236,12 +252,71 @@ std::vector<MeshGL> loadGLB(const std::filesystem::path& path) {
     return meshes;
 }
 
+void renderFrame(GLFWwindow* window, Shader& shader, const std::vector<MeshGL>& meshes) {
+    // Actualizar el tiempo del fotograma y procesar los controles.
+    float currentFrame = (float)glfwGetTime();
+    deltaTime = currentFrame - lastFrame;
+    lastFrame = currentFrame;
+
+    processInput(window);
+
+    // Avanzar el lanzamiento hasta el final de la curva y limitar su progreso a 1.
+    if (bezierT < 1.0f) {
+        bezierT += throwSpeed * deltaTime;
+        if (bezierT >= 1.0f) {
+            bezierT = 0.0f;
+        }
+    }
+
+    // Obtener la posición actual del hacha en la curva.
+    glm::vec3 posActual = calcularBezierCubica(bezierT, P0, P1, P2, P3);
+
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    shader.use();
+
+    // Crear la matriz de proyección con la perspectiva y el aspecto de la ventana.
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    float aspect = width > 0 ? (float)width / (float)height : 1.0f;
+    glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 100.0f);
+
+    // Crear la matriz de vista para situar la cámara en la escena.
+    glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+
+    // Crear la matriz de modelo: posicionar, orientar y escalar el hacha.
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, posActual);
+    // La orientación del hacha se mantiene fija durante el recorrido.
+    model = glm::rotate(model, glm::radians(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::scale(model, glm::vec3(0.1f));
+
+    // Combinar las transformaciones y enviarlas al shader.
+    glm::mat4 mvp = projection * view * model;
+    shader.setMat4("uMVP", mvp);
+
+    // Dibujar todas las mallas con sus texturas.
+    for (const auto& mesh : meshes) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, mesh.textureID);
+        glBindVertexArray(mesh.vao);
+        glDrawElements(GL_TRIANGLES, mesh.indexCount, GL_UNSIGNED_INT, 0);
+    }
+
+    // Desvincular recursos y presentar el fotograma.
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+}
+
 int main() {
     std::cout << "==========================================" << std::endl;
     std::cout << " Proyecto: Lanzamiento Bezier - CAMILO YELA" << std::endl;
     std::cout << " Controles: WASD / Flechas = Camara | R = Relanzar" << std::endl;
     std::cout << "==========================================" << std::endl;
 
+    // Inicializar GLFW y solicitar un contexto OpenGL 3.3.
     if (!glfwInit()) return -1;
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -249,6 +324,7 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_DEPTH_BITS, 24);
 
+    // Crear la ventana y activar el contexto antes de inicializar GLAD.
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Lanzamiento Bezier - CAMILO YELA", nullptr, nullptr);
     if (window == nullptr) {
         glfwTerminate();
@@ -257,61 +333,22 @@ int main() {
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) return -1;
+
+    // Configurar el estado de OpenGL y preparar el shader y el modelo.
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     Shader shader("default.vert", "default.frag");
     shader.use();
     shader.setInt("texture1", 0);
-    std::vector hatchetMeshes = loadGLB("psx_hatchet_low-poly.glb");
+    std::vector<MeshGL> hatchetMeshes = loadGLB("psx_hatchet_low-poly.glb");
+
+    // Mantener la aplicación activa hasta que se solicite cerrar la ventana.
     while (!glfwWindowShouldClose(window)) {
-        float currentFrame = (float)glfwGetTime();
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
-        processInput(window);
-        // Avanzar el progreso 't' en la curva de Bézier hasta llegar a 1.0 (el objetivo)
-        if (bezierT < 1.0f) {
-            bezierT += throwSpeed * deltaTime;
-            if (bezierT > 1.0f) {
-                bezierT = 1.0f; // Se clava/detiene en el punto objetivo P3
-            }
-        }
-        // Calcular la posición 3D actual del hacha sobre la curva
-        glm::vec3 posActual = calcularBezierCubica(bezierT, P0, P1, P2, P3);
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        shader.use();
-        int width = 0, height = 0;
-        glfwGetFramebufferSize(window, &width, &height);
-        float aspect = width > 0 ? (float)width / (float)height : 1.0f;
-        glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 100.0f);
-        glm::mat4 view = glm::lookAt(
-            cameraPos,
-            cameraPos + cameraFront,
-            cameraUp
-        );
-        // MATRIZ DE MODELO:
-        // 1. Trasladamos el hacha al punto calculado en la Curva de Bézier
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, posActual);
-        // 2. Orientación fija de lanzamiento (sin girar sobre su eje)
-        // Ajusta este ángulo si quieres que el filo apunte hacia la derecha (+X)
-        model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        // 3. Escala de 0.9f que configuraste
-        model = glm::scale(model, glm::vec3(0.9f));
-        glm::mat4 mvp = projection * view * model;
-        shader.setMat4("uMVP", mvp);
-        for (const auto& mesh : hatchetMeshes) {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, mesh.textureID);
-            glBindVertexArray(mesh.vao);
-            glDrawElements(GL_TRIANGLES, mesh.indexCount, GL_UNSIGNED_INT, 0);
-        }
-        glBindVertexArray(0);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+        renderFrame(window, shader, hatchetMeshes);
     }
+
+    // Liberar los recursos de GPU asociados a las mallas.
     for (const auto& mesh : hatchetMeshes) {
         glDeleteVertexArrays(1, &mesh.vao);
         glDeleteBuffers(1, &mesh.vbo);
@@ -320,6 +357,7 @@ int main() {
             glDeleteTextures(1, &mesh.textureID);
         }
     }
+    // Destruir el shader y finalizar GLFW.
     shader.destroy();
     glfwTerminate();
     return 0;
